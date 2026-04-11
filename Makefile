@@ -4,19 +4,12 @@
 # when installing falcon-core. The falcon_core_cpp and falcon_core_c-api got merged in includes into falcon_core and the cerela types xtensor got added to the cereal library
 
 # Detect OS
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-    PLATFORM := linux
-    CMAKE_GENERATOR := Ninja
-    VCPKG_TRIPLET ?= x64-linux-dynamic
-    NPROC := $(shell nproc 2>/dev/null || echo 4)
-endif
-ifeq ($(OS),Windows_NT)
-    PLATFORM := windows
-    CMAKE_GENERATOR := "Visual Studio 17 2022"
-    VCPKG_TRIPLET ?= x64-windows
-    NPROC := 4
-endif
+PLATFORM := linux
+CMAKE_GENERATOR := Ninja
+VCPKG_TRIPLET ?= x64-linux-dynamic
+NPROC := $(shell nproc 2>/dev/null || echo 4)
+export CC=clang
+export CXX=clang++
 
 ENV_FILE := .nuget-credentials
 ifeq ($(wildcard $(ENV_FILE)),)
@@ -182,13 +175,13 @@ configure: configure-debug configure-release
 
 build-debug: configure-debug
 	@echo "Building debug..."
-	ninja -C $(BUILD_DIR_DEBUG) -j$(NPROC)
+	cmake --build $(BUILD_DIR_DEBUG) -- -j$(NPROC)
 	@echo "✓ Debug build complete"
 	@$(MAKE) clangd-helpers
 
 build-release: configure-release
 	@echo "Building release..."
-	ninja -C $(BUILD_DIR_RELEASE) -j$(NPROC)
+	cmake --build $(BUILD_DIR_RELEASE) -- -j$(NPROC)
 	@echo "✓ Release build complete"
 
 install: build-release
@@ -198,8 +191,7 @@ install: build-release
 
 clean:
 	@echo "Cleaning build artifacts and test containers..."
-	rm -rf $(BUILD_DIR_DEBUG) $(BUILD_DIR_RELEASE) build/ compile_commands.json
-	@$(MAKE) docker-clean
+	rm -rf $(BUILD_DIR_DEBUG) $(BUILD_DIR_RELEASE) build/ compile_commands.json ./vcpkg_installed/
 	@echo "✓ Clean complete"
 
 rebuild-debug:

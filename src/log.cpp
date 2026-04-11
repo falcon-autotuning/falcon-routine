@@ -1,5 +1,6 @@
 #include "falcon-routine/log.hpp"
 #include <cstdlib>
+#include <iostream>
 #include <mutex>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -21,7 +22,7 @@ void initialize_logger() {
     // Create sinks
     std::vector<spdlog::sink_ptr> sinks;
 
-    if (log_file && strlen(log_file) > 0) {
+    if ((log_file != nullptr) && strlen(log_file) > 0) {
       // Rotating file sink: 10MB max, 3 rotated files
       auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
           log_file, 1024 * 1024 * 10, 3);
@@ -44,15 +45,17 @@ void initialize_logger() {
                                                 sinks.end());
 
     // Set pattern
-    if (log_pattern && strlen(log_pattern) > 0) {
+    if ((log_pattern != nullptr) && strlen(log_pattern) > 0) {
       g_logger->set_pattern(log_pattern);
     } else {
       // Default pattern: [timestamp] [level] message
       g_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
     }
 
-    // Set level
-    if (log_level && strlen(log_level) > 0) {
+    // Set default level
+    g_logger->set_level(spdlog::level::info);
+
+    if ((log_level != nullptr) && strlen(log_level) > 0) {
       std::string level_str(log_level);
       if (level_str == "trace") {
         g_logger->set_level(spdlog::level::trace);
@@ -68,11 +71,7 @@ void initialize_logger() {
         g_logger->set_level(spdlog::level::critical);
       } else if (level_str == "off") {
         g_logger->set_level(spdlog::level::off);
-      } else {
-        g_logger->set_level(spdlog::level::info); // default
       }
-    } else {
-      g_logger->set_level(spdlog::level::info); // default
     }
 
     // Flush on warning and above
@@ -82,9 +81,7 @@ void initialize_logger() {
     spdlog::set_default_logger(g_logger);
 
   } catch (const spdlog::spdlog_ex &ex) {
-    fprintf(stderr, "Log initialization failed: %s\n", ex.what());
-    // Create fallback console logger
-    g_logger = spdlog::stdout_color_mt("falcon-routine-fallback");
+    std::cerr << "Log initialization failed: " << ex.what() << '\n';
   }
 }
 

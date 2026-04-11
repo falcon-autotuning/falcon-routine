@@ -1,6 +1,7 @@
 #include "../test_utils/TestFixture.hpp"
 #include "falcon-routine/database.hpp"
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 #include <thread>
 
 using namespace falcon::routine;
@@ -28,7 +29,7 @@ TEST_F(DatabaseUnitTest, GetByName) {
   DeviceCharacteristic dc;
   dc.scope = "test";
   dc.name = "test_device";
-  dc.characteristic = JSONPrimitive("test_value");
+  dc.characteristic = "test_value";
 
   db_->insert(dc);
 
@@ -47,7 +48,7 @@ TEST_F(DatabaseUnitTest, GetMany) {
     DeviceCharacteristic dc;
     dc.scope = "test";
     dc.name = "device_" + std::to_string(i);
-    dc.characteristic = JSONPrimitive(static_cast<double>(i));
+    dc.characteristic = i;
     db_->insert(dc);
   }
 
@@ -65,7 +66,7 @@ TEST_F(DatabaseUnitTest, GetAll) {
     DeviceCharacteristic dc;
     dc.scope = "test";
     dc.name = "device_" + std::to_string(i);
-    dc.characteristic = JSONPrimitive(i);
+    dc.characteristic = i;
     db_->insert(dc);
   }
 
@@ -80,13 +81,13 @@ TEST_F(DatabaseUnitTest, QueryByScope) {
   DeviceCharacteristic dc1;
   dc1.scope = "calibration";
   dc1.name = "cal_1";
-  dc1.characteristic = JSONPrimitive(1.0);
+  dc1.characteristic = 1.0;
   db_->insert(dc1);
 
   DeviceCharacteristic dc2;
   dc2.scope = "measurement";
   dc2.name = "meas_1";
-  dc2.characteristic = JSONPrimitive(2.0);
+  dc2.characteristic = 2.0;
   db_->insert(dc2);
 
   LazyReadOnlyDatabaseConnection lazy_db;
@@ -106,7 +107,7 @@ TEST_F(DatabaseUnitTest, Count) {
     DeviceCharacteristic dc;
     dc.scope = "test";
     dc.name = "device_" + std::to_string(i);
-    dc.characteristic = JSONPrimitive(i);
+    dc.characteristic = i;
     db_->insert(dc);
   }
 

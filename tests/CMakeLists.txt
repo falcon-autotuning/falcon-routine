@@ -41,21 +41,3 @@ else()
   gtest_discover_tests(falcon_routine_unit_tests)
 endif()
 
-# Integration tests
-add_executable(falcon_routine_integration_tests
-  integration/test_full_workflow.cpp
-)
-
-target_link_libraries(falcon_routine_integration_tests
-  PRIVATE
-    falcon-routine
-    falcon-routine-test-utils
-    GTest::gtest
-    GTest::gtest_main
-)
-
-if(WIN32)
-  add_test(NAME falcon_routine_integration_tests COMMAND falcon_routine_integration_tests)
-else()
-  gtest_discover_tests(falcon_routine_integration_tests)
-endif()

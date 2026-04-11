@@ -28,7 +28,7 @@ request_device_state(int timeout_ms);
  */
 falcon_core::communications::messages::MeasurementResponseSP
 request_measurement(
-    falcon_core::communications::messages::MeasurementRequestSP req,
+    const falcon_core::communications::messages::MeasurementRequestSP &req,
     int timeout_ms);
 
 } // namespace falcon::routine
