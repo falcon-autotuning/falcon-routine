@@ -1,5 +1,6 @@
 #pragma once
 
+#include "falcon-routine/export.h"
 #include <memory>
 #include <string>
 
@@ -25,47 +26,47 @@ namespace falcon::routine::log {
 /**
  * @brief Log at trace level (very verbose)
  */
-void trace(const std::string &msg);
+void FALCON_ROUTINE_API trace(const std::string &msg);
 
 /**
  * @brief Log at debug level
  */
-void debug(const std::string &msg);
+void FALCON_ROUTINE_API debug(const std::string &msg);
 
 /**
  * @brief Log at info level
  */
-void info(const std::string &msg);
+void FALCON_ROUTINE_API info(const std::string &msg);
 
 /**
  * @brief Log at warning level
  */
-void warn(const std::string &msg);
+void FALCON_ROUTINE_API warn(const std::string &msg);
 
 /**
  * @brief Log at error level
  */
-void error(const std::string &msg);
+void FALCON_ROUTINE_API error(const std::string &msg);
 
 /**
  * @brief Log at critical level
  */
-void critical(const std::string &msg);
+void FALCON_ROUTINE_API critical(const std::string &msg);
 
 /**
  * @brief Set log level programmatically
  * @param level One of: trace, debug, info, warn, error, critical, off
  */
-void set_level(const std::string &level);
+void FALCON_ROUTINE_API set_level(const std::string &level);
 
 /**
  * @brief Flush logs to file/output
  */
-void flush();
+void FALCON_ROUTINE_API flush();
 
 /**
  * @brief Get the underlying spdlog logger (advanced use)
  */
-std::shared_ptr<spdlog::logger> get_logger();
+std::shared_ptr<spdlog::logger> FALCON_ROUTINE_API get_logger();
 
 } // namespace falcon::routine::log

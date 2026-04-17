@@ -1,19 +1,21 @@
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
+set(DLL_SEARCH_PATHS "${CMAKE_BINARY_DIR}}/tests" "${CMAKE_BINARY_DIR}")
+string(REPLACE ";" "\\;" TEST_PATH_ENV "${DLL_SEARCH_PATHS}")
+set(TEST_PATH_ENV "${TEST_PATH_ENV};$ENV{PATH}")
+
 # Test utilities
-add_library(falcon-routine-test-utils STATIC
-  test_utils/TestFixture.hpp
-)
+add_library(falcon-routine-test-utils INTERFACE)
 
 target_link_libraries(falcon-routine-test-utils
-  PUBLIC
+  INTERFACE
     falcon-routine
     GTest::gtest
 )
 
 target_include_directories(falcon-routine-test-utils
-  PUBLIC
+  INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/test_utils
 )
 
@@ -35,9 +37,10 @@ target_link_libraries(falcon_routine_unit_tests
     GTest::gtest_main
 )
 
+add_test(NAME falcon_routine_unit_tests COMMAND falcon_routine_unit_tests)
 if(WIN32)
-  add_test(NAME falcon_routine_unit_tests COMMAND falcon_routine_unit_tests)
-else()
-  gtest_discover_tests(falcon_routine_unit_tests)
+  set_tests_properties(falcon_routine_unit_tests
+    PROPERTIES ENVIRONMENT "PATH=${TEST_PATH_ENV}")
 endif()
+
 

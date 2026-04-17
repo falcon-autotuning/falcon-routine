@@ -18,6 +18,11 @@ void initialize_logger() {
     const char *log_file = std::getenv("LOG_FILE");
     const char *log_level = std::getenv("LOG_LEVEL");
     const char *log_pattern = std::getenv("LOG_PATTERN");
+    std::cerr << "[log debug] initialize_logger() called\n";
+    std::cerr << "[log debug] LOG_FILE=" << (log_file ? log_file : "nullptr")
+              << "\n";
+    std::cerr << "[log debug] LOG_LEVEL=" << (log_level ? log_level : "nullptr")
+              << "\n";
 
     // Create sinks
     std::vector<spdlog::sink_ptr> sinks;
@@ -43,6 +48,8 @@ void initialize_logger() {
     // Create multi-sink logger
     g_logger = std::make_shared<spdlog::logger>("falcon-routine", sinks.begin(),
                                                 sinks.end());
+    std::cerr << "[log debug] logger level after init: " << g_logger->level()
+              << "\n";
 
     // Set pattern
     if ((log_pattern != nullptr) && strlen(log_pattern) > 0) {
@@ -74,9 +81,7 @@ void initialize_logger() {
       }
     }
 
-    // Flush on warning and above
-    g_logger->flush_on(spdlog::level::warn);
-
+    g_logger->flush_on(g_logger->level());
     // Register as default logger
     spdlog::set_default_logger(g_logger);
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "falcon-routine/export.h"
 #include <falcon-comms/routine_comms.hpp>
 #include <falcon-core/communications/messages/MeasurementRequest.hpp>
 #include <falcon-core/communications/messages/MeasurementResponse.hpp>
@@ -18,7 +19,8 @@ using Comms = falcon::comms::RoutineComms;
  * @return The VoltageStatesResponse if successful
  */
 falcon_core::communications::messages::VoltageStatesResponseSP
-request_device_state(int timeout_ms);
+    FALCON_ROUTINE_API
+    request_device_state(int timeout_ms);
 
 /**
  * @brief Allows access to the instrument hub to request a measurement
@@ -26,7 +28,7 @@ request_device_state(int timeout_ms);
  * @param timeout_ms the timeout in milliseconds to wait
  * @return The MeasurementResponse if successful
  */
-falcon_core::communications::messages::MeasurementResponseSP
+falcon_core::communications::messages::MeasurementResponseSP FALCON_ROUTINE_API
 request_measurement(
     const falcon_core::communications::messages::MeasurementRequestSP &req,
     int timeout_ms);

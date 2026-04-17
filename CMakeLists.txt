@@ -64,6 +64,7 @@ target_link_libraries(falcon-routine
     spdlog::spdlog
     cnats::nats
 )
+target_compile_definitions(falcon-routine PRIVATE falcon_routine_EXPORTS)
 
 # Compiler warnings
 target_compile_options(falcon-routine PRIVATE -Wall -Wextra -Wpedantic)
