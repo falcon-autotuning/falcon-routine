@@ -16,6 +16,12 @@ option(BUILD_TESTS "Build tests" OFF)
 option(USE_CCACHE "Enable ccache or sccache if available" ON)
 option(ENABLE_PCH "Enable precompiled headers" ON)
 
+# Windows-specific
+if(WIN32)
+  add_compile_definitions(NOMINMAX)
+  add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 # Compiler cache
 if(USE_CCACHE)
   find_program(SCCACHE_PROGRAM sccache)
