@@ -4,7 +4,35 @@
 #include <gtest/gtest.h>
 #include <string>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 namespace falcon::routine::test {
+
+/**
+ * @brief Cross-platform environment variable setter
+ */
+inline int set_env(const std::string &name, const std::string &value) {
+#ifdef _WIN32
+  std::string env_entry = name + "=" + value;
+  return _putenv(env_entry.c_str());
+#else
+  return setenv(name.c_str(), value.c_str(), 1); // overwrite=1
+#endif
+}
+
+/**
+ * @brief Cross-platform environment variable unsetter
+ */
+inline int unset_env(const std::string &name) {
+#ifdef _WIN32
+  std::string env_entry = name + "=";
+  return _putenv(env_entry.c_str());
+#else
+  return unsetenv(name.c_str());
+#endif
+}
 
 /**
  * @brief Base test fixture with environment setup
@@ -15,8 +43,8 @@ protected:
 
   void TearDown() override {
     // Clean up environment variables to avoid pollution
-    unsetenv("FALCON_DATABASE_URL");
-    unsetenv("NATS_URL");
+    unset_env("FALCON_DATABASE_URL");
+    unset_env("NATS_URL");
   }
 
   void setupEnvironment() {
@@ -31,7 +59,7 @@ protected:
     }
 
     // Set FALCON_DATABASE_URL for database connections that use env var
-    setenv("FALCON_DATABASE_URL", db_url_.c_str(), 1);
+    set_env("FALCON_DATABASE_URL", db_url_);
 
     // NATS URL from environment or default
     const char *test_nats_url = std::getenv("TEST_NATS_URL");
@@ -42,10 +70,10 @@ protected:
     }
 
     // Set NATS_URL for Hub connections
-    setenv("NATS_URL", nats_url_.c_str(), 1);
+    set_env("NATS_URL", nats_url_);
 
     // Set log level to debug for tests
-    setenv("LOG_LEVEL", "debug", 1);
+    set_env("LOG_LEVEL", "debug");
   }
 
   [[nodiscard]] std::string getDatabaseUrl() const { return db_url_; }
