@@ -1,6 +1,6 @@
 {
   "name": "falcon-core",
-  "version": "1.2.8",
+  "version": "1.2.10",
   "features": {
     "c-api": {
       "description": "Builds the optional C-API library for falcon-core."
@@ -38,10 +38,6 @@
     {
       "name": "exprtk",
       "version>=": "0.0.3#0"
-    },
-    {
-      "name": "gtest",
-      "version>=": "1.16.0"
     },
     {
       "name": "yaml-cpp",

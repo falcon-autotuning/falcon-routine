@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg.json" VCPKG_JSON)
+string(JSON PROJECT_VERSION GET "${VCPKG_JSON}" "version")
 project(
   falcon-routine
-  VERSION 1.0.0
+  VERSION ${PROJECT_VERSION}
   LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -9,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Build Options
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_TESTS "Build tests" OFF)
 option(USE_CCACHE "Enable ccache or sccache if available" ON)
 option(ENABLE_PCH "Enable precompiled headers" ON)
 
@@ -36,7 +39,6 @@ find_package(spdlog          CONFIG REQUIRED)
 find_package(cnats           CONFIG REQUIRED)
 find_package(falcon-database CONFIG REQUIRED)
 find_package(falcon-comms    CONFIG REQUIRED)
-find_package(Boost           CONFIG REQUIRED COMPONENTS filesystem uuid)
 find_package(falcon-core     CONFIG REQUIRED)
 
 message(STATUS "Found nlohmann_json: ${nlohmann_json_VERSION}")
