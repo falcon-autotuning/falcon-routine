@@ -63,10 +63,9 @@ docker-down:
 
 test: docker-up build
 	@echo "Running tests for $(PRESET)..."
-	@TEST_DATABASE_URL="$(TEST_DATABASE_URL)" \
-	 TEST_NATS_URL="$(TEST_NATS_URL)" \
-	 LOG_FILE="$(LOG_FILE)" \
-	 LOG_LEVEL="$(LOG_LEVEL)" \
+	@TEST_DATABASE_URL="postgresql://falcon_test:falcon_test_password@localhost:5432/falcon_test" \
+	 TEST_NATS_URL="nats://localhost:4222" \
+	 LOG_FILE=$(PWD)/falcon_test.log LOG_LEVEL=trace \
 	 ctest --preset $(PRESET) --output-on-failure; \
 	EXIT_CODE=$$?; \
 	$(MAKE) docker-down; \
