@@ -12,7 +12,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Build Options
 option(BUILD_TESTS "Build tests" OFF)
 option(USE_CCACHE "Enable ccache or sccache if available" ON)
-option(ENABLE_PCH "Enable precompiled headers" ON)
 
 # Windows-specific
 if(WIN32)
@@ -75,18 +74,6 @@ target_compile_definitions(falcon-routine PRIVATE falcon_routine_EXPORTS)
 # Compiler warnings
 target_compile_options(falcon-routine PRIVATE -Wall -Wextra -Wpedantic)
 
-if(ENABLE_PCH)
-  target_precompile_headers(falcon-routine
-    PRIVATE
-      <string>
-      <vector>
-      <memory>
-      <optional>
-      <mutex>
-      <nlohmann/json.hpp>
-      <spdlog/spdlog.h>
-  )
-endif()
 
 # Tests
 if(BUILD_TESTS)
