@@ -9,6 +9,7 @@
 #include <falcon-core/physics/device_structures/Connections.hpp>
 #include <falcon-core/physics/device_structures/GateRelations.hpp>
 
+namespace falcon { namespace routine {} }
 using namespace falcon::routine;
 using namespace falcon_core;
 

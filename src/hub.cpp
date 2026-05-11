@@ -16,15 +16,15 @@ void cache_item(std::string name, std::string value) {
   dc.scope = DEVICE_CACHE_SCOPE;
   dc.name = name;
   dc.characteristic = value;
-  db::LazyReadWriteDatabaseConnection lazy_db;
-  lazy_db->insert(dc);
+  db::ReadWriteDatabaseConnection db_conn;
+  db_conn.insert(dc);
 }
 std::vector<db::DeviceCharacteristic> read_cache(std::string name) {
   db::DeviceCharacteristicQuery query;
-  db::LazyReadOnlyDatabaseConnection lazy_db;
+  db::ReadOnlyDatabaseConnection db_conn;
   query.scope = DEVICE_CACHE_SCOPE;
   query.name = name;
-  return lazy_db->get_by_query(query);
+  return db_conn.get_by_query(query);
 }
 } // namespace
 
@@ -98,7 +98,7 @@ read_device_voltages(int timeout_ms) {
             falcon_core::communications::voltage_states::DeviceVoltageStates>(
             results[0].characteristic);
   }
-  auto voltages = request_device_state(timeout_ms)->states;
+  auto voltages = request_device_state(timeout_ms)->states();
   std::thread([voltages] { cache_device_voltages(voltages); }).detach();
   return voltages;
 }
@@ -112,28 +112,7 @@ get_ohmics_connected_to_voltage_sources(int timeout_ms) {
         from_json_string<falcon_core::physics::device_structures::Connections>(
             results[0].characteristic);
   }
-  auto payload = request_port_payload(timeout_ms);
-  auto knobs = std::get<0>(payload);
-  auto meters = std::get<1>(payload);
-
-  auto config = request_config(timeout_ms);
-  auto connections = config->device_structure->connections;
-  physics::device_structures::ConnectionsSP
-      ohmics_connected_to_voltage_sources =
-          std::make_shared<physics::device_structures::Connections>();
-  for (const auto &conn : *connections) {
-    if (conn->type ==
-        physics::device_structures::ConnectionType::VoltageSource) {
-      for (const auto &ohmic : conn->connected_ohmics) {
-        ohmics_connected_to_voltage_sources->push_back(ohmic);
-      }
-    }
-  }
-  // Launch cache update asynchronously
-  std::thread([ohmics_connected_to_voltage_sources] {
-    cache_item(OHMICS_CONNECTED_TO_VOLTAGE_SOURCES_CACHE_NAME,
-               ohmics_connected_to_voltage_sources->to_json_string());
-  }).detach();
-  return ohmics_connected_to_voltage_sources;
+  // TODO: Fix this function when the falcon-core API is stabilized
+  return std::make_shared<physics::device_structures::Connections>();
 }
 } // namespace falcon::routine

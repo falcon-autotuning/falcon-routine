@@ -65,6 +65,7 @@ test: docker-up build
 	@echo "Running tests for $(PRESET)..."
 	@TEST_DATABASE_URL="postgresql://falcon_test:falcon_test_password@localhost:5433/falcon_test" \
 	 TEST_NATS_URL="nats://localhost:4222" \
+	 LD_LIBRARY_PATH=$(PWD)/$(CMAKE_BUILD_DIR):$(PWD)/$(CMAKE_BUILD_DIR)/tests:$$LD_LIBRARY_PATH \
 	 LOG_FILE=$(PWD)/falcon_test.log LOG_LEVEL=trace \
 	 ctest --preset $(PRESET) --output-on-failure; \
 	EXIT_CODE=$$?; \

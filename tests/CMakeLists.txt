@@ -27,6 +27,7 @@ set_target_properties(falcon-routine-test-utils PROPERTIES
 add_executable(falcon_routine_unit_tests
   unit/test_database.cpp
   unit/test_log.cpp
+  unit/test_math.cpp
 )
 
 target_link_libraries(falcon_routine_unit_tests
