@@ -9,8 +9,7 @@
 #include <falcon-core/physics/device_structures/Connections.hpp>
 #include <falcon-core/physics/device_structures/GateRelations.hpp>
 
-namespace falcon { namespace routine {} }
-using namespace falcon::routine;
+namespace falcon::routine {
 using namespace falcon_core;
 
 /**
@@ -117,3 +116,4 @@ needed
 */
 bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
                                             int timeout_ms);
+} // namespace falcon::routine

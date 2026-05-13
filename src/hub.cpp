@@ -4,6 +4,7 @@
 #include <falcon-comms/runtime_comms.hpp>
 #include <falcon-core/communications/Time.hpp>
 #include <falcon-core/communications/messages/VoltageStatesResponse.hpp>
+#include <falcon-core/physics/config/core/VoltageConstraints.hpp>
 #include <limits>
 #include <stdexcept>
 #include <thread>
@@ -106,7 +107,7 @@ read_device_voltages(int timeout_ms) {
 void cache_config(physics::config::core::ConfigSP config) {
   return cache_item(CONFIG_CACHE_NAME, config->to_json_string());
 }
-physice::config::core::ConfigSP read_config(int timeout_ms) {
+physics::config::core::ConfigSP read_config(int timeout_ms) {
   auto results = read_cache(CONFIG_CACHE_NAME);
   if (!results.empty()) {
     // Cache hit, return cached value
@@ -136,10 +137,10 @@ get_ohmics_connected_to_voltage_sources(int timeout_ms) {
   physics::device_structures::ConnectionsSP
       ohmics_connected_to_voltage_sources =
           std::make_shared<physics::device_structures::Connections>();
-  auto raw_ports = *knobs->ports();
-  auto raw_ohmics = *connections.;
+  auto raw_ports = *knobs.ports();
+  auto raw_ohmics = *connections;
   for (const auto &knob : raw_ports) {
-    auto knob_connection = knob->connection();
+    auto knob_connection = knob->pseudo_name();
     if (knob_connection->is_ohmic()) {
       for (const auto &ohmic : raw_ohmics) {
         if (*knob_connection == *ohmic) {
@@ -151,10 +152,13 @@ get_ohmics_connected_to_voltage_sources(int timeout_ms) {
   // Remove duplicates to ensure uniqueness
   std::sort(ohmics_connected_to_voltage_sources->begin(),
             ohmics_connected_to_voltage_sources->end());
-  ohmics_connected_to_voltage_sources->erase(
-      std::unique(ohmics_connected_to_voltage_sources->begin(),
-                  ohmics_connected_to_voltage_sources->end()),
-      ohmics_connected_to_voltage_sources->end());
+
+  for (size_t i = ohmics_connected_to_voltage_sources->size() - 1; i > 0; --i) {
+    if ((*ohmics_connected_to_voltage_sources)[i] ==
+        (*ohmics_connected_to_voltage_sources)[i - 1]) {
+      ohmics_connected_to_voltage_sources->erase_at(i);
+    }
+  }
   // Launch cache update asynchronously
   std::thread([ohmics_connected_to_voltage_sources] {
     cache_item(OHMICS_CONNECTED_TO_VOLTAGE_SOURCES_CACHE_NAME,
@@ -177,9 +181,9 @@ get_voltage_bounds(const instrument_interfaces::names::PortsSP search_domain,
   if (!config) {
     throw std::runtime_error("Failed to read config");
   }
-  VoltageConstraints constraints{
+  physics::config::core::VoltageConstraints constraints{
       config->adjacency(), config->max_safe_diff(),
-      std::make_pair<double, double>(config->min_bound(), config->max_bound())};)
+      std::make_pair<double, double>(config->min_bound(), config->max_bound())};
 
   return constraints.compute_maximal_domain(search_domain, voltage_states);
 }
@@ -189,9 +193,9 @@ bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
   if (!config) {
     throw std::runtime_error("Failed to read config");
   }
-  VoltageConstraints constraints{
+  physics::config::core::VoltageConstraints constraints{
       config->adjacency(), config->max_safe_diff(),
-      std::make_pair<double, double>(config->min_bound(), config->max_bound())};)
+      std::make_pair<double, double>(config->min_bound(), config->max_bound())};
 
   return constraints.validate_voltage_state(proposed_voltages);
 }
