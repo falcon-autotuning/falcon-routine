@@ -58,25 +58,35 @@ class CurveFit2DObjective {
     std::vector<std::vector<double>> y;
     std::vector<std::vector<double>> z;
 
+    std::optional<std::vector<std::pair<double, double>>> bounds;
+ 
 public:
     CurveFit2DObjective(func2D m, const std::vector<std::vector<double>>& xv, 
                         const std::vector<std::vector<double>>& yv, 
-                        const std::vector<std::vector<double>>& zv)
-        : model(m), x(xv), y(yv), z(zv) {}
+                        const std::vector<std::vector<double>>& zv,
+                        std::optional<std::vector<std::pair<double, double>>> b = std::nullopt)
+        : model(m), x(xv), y(yv), z(zv), bounds(b) {}
 
     double Evaluate(const arma::mat& parameters) {
         std::vector<double> params(parameters.n_elem);
-        for (size_t i = 0; i < parameters.n_elem; ++i) params[i] = parameters(i);
+        double penalty = 0.0;
 
-        auto z_fit = model(x, y, {params}); // The model expects params as the 3rd arg in some way? 
-        // Wait, math.hpp says func2D is (x, y, params) returning z.
-        // Let's re-read math.hpp: 
-        // using func2D = std::function<std::vector<std::vector<double>>(
-        //    std::vector<std::vector<double>>, std::vector<std::vector<double>>,
-        //    std::vector<std::vector<double>>)>;
-        // Ah, params is also a vector<vector<double>>? That's odd. 
-        // Usually params is a flat vector. Let's assume params[0] is the flat vector.
-        
+        for (size_t i = 0; i < parameters.n_elem; ++i) {
+            double val = parameters(i);
+            if (bounds.has_value() && i < bounds->size()) {
+                double low = (*bounds)[i].first;
+                double high = (*bounds)[i].second;
+                if (val < low) {
+                    penalty += 1e8 * (low - val) * (low - val);
+                    val = low; // Clamp for evaluation to prevent model instability
+                } else if (val > high) {
+                    penalty += 1e8 * (val - high) * (val - high);
+                    val = high; // Clamp for evaluation
+                }
+            }
+            params[i] = val;
+        }
+
         std::vector<std::vector<double>> p_wrapped = {params};
         auto z_fit_res = model(x, y, p_wrapped);
 
@@ -84,10 +94,18 @@ public:
         for (size_t i = 0; i < z.size(); ++i) {
             for (size_t j = 0; j < z[i].size(); ++j) {
                 double diff = z[i][j] - z_fit_res[i][j];
+                if (std::isnan(diff) || std::isinf(diff)) {
+                    return 1e18; // Large value instead of NaN
+                }
                 rss += diff * diff;
             }
         }
-        return rss;
+
+        return rss + penalty;
+    }
+
+    void Gradient(const arma::mat& parameters, arma::mat& gradient) {
+        numeric_gradient(*this, parameters, gradient);
     }
 };
 
@@ -142,8 +160,10 @@ FALCON_ROUTINE_API curvefit_result curvefit2D(func2D model, const std::vector<st
         p_arma.fill(1.0);
     }
 
-    CurveFit2DObjective obj(model, x, y, z);
-    ens::DE optimizer;
+    CurveFit2DObjective obj(model, x, y, z, params.bounds);
+    
+    // User requested DE. Using robust parameters.
+    ens::DE optimizer(200, 3000, 0.6, 0.8, -1.0);
 
     try {
         optimizer.Optimize(obj, p_arma);
@@ -196,7 +216,10 @@ FALCON_ROUTINE_API double channel_accumulation_2d(double x, double y,
                                double bx, double dx, double dy,
                                double dm, double dr) {
     auto sig = [](double val, double mm, double kk, double bb) {
-        return mm / (1.0 + std::exp(-kk * (val - bb)));
+        double arg = -kk * (val - bb);
+        if (arg > 50.0) return 0.0; // Avoid overflow, return small value
+        if (arg < -50.0) return mm;  // Avoid underflow
+        return mm / (1.0 + std::exp(arg));
     };
 
     // Range-based scaling similar to Python version if needed, 

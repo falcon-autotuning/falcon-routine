@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <random>
+#include <armadillo>
 
 using namespace falcon::routine;
 
@@ -63,10 +64,126 @@ TEST(MathTest, CurveFitSigmoid) {
     params.initial_guess = {0.8, 4.5, 1.5, 0.0};
 
     auto res = curvefit1D(model, x, y, params);
-
+ 
     ASSERT_TRUE(res.success);
     EXPECT_NEAR(res.coefficients[0], A, 1e-2);
     EXPECT_NEAR(res.coefficients[1], x0, 1e-2);
     EXPECT_NEAR(res.coefficients[2], k, 1e-2);
     EXPECT_NEAR(res.coefficients[3], b, 1e-2);
+}
+
+TEST(MathTest, CurveFit2DChannelAccumulation) {
+    auto model = [](std::vector<std::vector<double>> x, 
+                    std::vector<std::vector<double>> y, 
+                    std::vector<std::vector<double>> p) {
+        std::vector<double> params = p[0];
+        std::vector<std::vector<double>> z(x.size(), std::vector<double>(x[0].size()));
+        for (size_t i = 0; i < x.size(); ++i) {
+            for (size_t j = 0; j < x[i].size(); ++j) {
+                z[i][j] = channel_accumulation_2d(x[i][j], y[i][j],
+                                                 params[0], params[1], params[2], params[3],
+                                                 params[4], params[5], params[6],
+                                                 params[7], params[8], params[9],
+                                                 params[10], params[11]);
+            }
+        }
+        return z;
+    };
+
+    // Generate grid
+    std::vector<std::vector<double>> x(10, std::vector<double>(10));
+    std::vector<std::vector<double>> y(10, std::vector<double>(10));
+    for (int i = 0; i < 10; ++i) {
+        for (int j = 0; j < 10; ++j) {
+            x[i][j] = i * 0.1;
+            y[i][j] = j * 0.1;
+        }
+    }
+
+    // Parameters for channel_accumulation_2d (12 total)
+    // double cx, double cy, double cm, double cr,
+    // double m1, double m2, double m3,
+    // double bx, double dx, double dy,
+    // double dm, double dr
+    std::vector<double> true_p = {
+        0.5, 0.5, 1.0, 10.0, // cx, cy, cm, cr
+        1.0, -1.0, 0.5,     // m1, m2, m3
+        0.2, 0.8, 0.5,     // bx, dx, dy
+        0.5, 5.0           // dm, dr
+    };
+
+    std::vector<std::vector<double>> z = model(x, y, {true_p});
+
+    fitting_parameters params;
+    params.initial_guess = true_p;
+    // Perturb initial guess slightly to verify convergence
+    for (double& val : *params.initial_guess) val *= 1.05;
+
+    // Provide reasonable bounds to help DE converge
+    std::vector<std::pair<double, double>> bounds;
+    for (double val : true_p) {
+        bounds.push_back({val - 2.0, val + 2.0});
+    }
+    params.bounds = bounds;
+
+    // Set seed for reproducibility
+    arma::arma_rng::set_seed(42);
+
+    auto res = curvefit2D(model, x, y, z, params);
+
+    ASSERT_TRUE(res.success);
+    for (size_t i = 0; i < true_p.size(); ++i) {
+        EXPECT_NEAR(res.coefficients[i], true_p[i], 2.5); 
+    }
+    EXPECT_GT(res.r_squared, 0.90);
+}
+
+TEST(MathTest, CurveFit2DGaussian) {
+    auto model = [](std::vector<std::vector<double>> x, 
+                    std::vector<std::vector<double>> y, 
+                    std::vector<std::vector<double>> p) {
+        double A = p[0][0];
+        double x0 = p[0][1];
+        double y0 = p[0][2];
+        double sigma = p[0][3];
+        std::vector<std::vector<double>> z(x.size(), std::vector<double>(x[0].size()));
+        for (size_t i = 0; i < x.size(); ++i) {
+            for (size_t j = 0; j < x[i].size(); ++j) {
+                double dx = x[i][j] - x0;
+                double dy = y[i][j] - y0;
+                z[i][j] = A * std::exp(-(dx*dx + dy*dy) / (2 * sigma * sigma));
+            }
+        }
+        return z;
+    };
+
+    std::vector<std::vector<double>> x(10, std::vector<double>(10));
+    std::vector<std::vector<double>> y(10, std::vector<double>(10));
+    for (int i = 0; i < 10; ++i) {
+        for (int j = 0; j < 10; ++j) {
+            x[i][j] = i * 1.0;
+            y[i][j] = j * 1.0;
+        }
+    }
+
+    std::vector<double> true_p = {10.0, 5.0, 5.0, 2.0};
+    std::vector<std::vector<double>> z = model(x, y, {true_p});
+
+    fitting_parameters params;
+    params.initial_guess = {9.0, 4.5, 4.5, 1.5};
+    params.bounds = {
+        {0.0, 20.0}, {0.0, 10.0}, {0.0, 10.0}, {0.1, 5.0}
+    };
+
+    // Set seed for reproducibility
+    arma::arma_rng::set_seed(42);
+
+    auto res = curvefit2D(model, x, y, z, params);
+
+    ASSERT_TRUE(res.success);
+    EXPECT_NEAR(res.coefficients[0], true_p[0], 0.5);
+    EXPECT_NEAR(res.coefficients[1], true_p[1], 0.5);
+    EXPECT_NEAR(res.coefficients[2], true_p[2], 0.5);
+    EXPECT_NEAR(res.coefficients[3], true_p[3], 0.5);
+    EXPECT_GT(res.r_squared, 0.95);
 }
