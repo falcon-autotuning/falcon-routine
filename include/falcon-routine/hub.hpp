@@ -116,4 +116,14 @@ needed
 */
 bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
                                             int timeout_ms);
+
+/**
+ * @brief A dedicated ramp method for sending ramps to the instrument hub.
+ * @param end_point The end point for the ramp
+ * @param max_ramp_rate the maximum ramp rate in volts per second
+ * @param timeout_ms the timeout in milliseconds to wait if a request is needed
+ * @return bool indicating a successful sweep
+ */
+bool FALCON_ROUTINE_API ramp(math::PointSP end_point, double max_ramp_rate,
+                             int timeout_ms);
 } // namespace falcon::routine

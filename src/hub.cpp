@@ -1,9 +1,11 @@
 #include "falcon-routine/hub.hpp"
 #include "falcon-routine/database.hpp"
+#include <exception>
 #include <falcon-comms/routine_comms.hpp>
 #include <falcon-comms/runtime_comms.hpp>
 #include <falcon-core/communications/Time.hpp>
 #include <falcon-core/communications/messages/VoltageStatesResponse.hpp>
+#include <falcon-core/math/Vector.hpp>
 #include <falcon-core/physics/config/core/VoltageConstraints.hpp>
 #include <limits>
 #include <stdexcept>
@@ -187,8 +189,7 @@ get_voltage_bounds(const instrument_interfaces::names::PortsSP search_domain,
 
   return constraints.compute_maximal_domain(search_domain, voltage_states);
 }
-bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
-                                            int timeout_ms) {
+bool safe_voltage_change(math::PointSP proposed_voltages, int timeout_ms) {
   auto config = read_config(timeout_ms);
   if (!config) {
     throw std::runtime_error("Failed to read config");
@@ -198,5 +199,67 @@ bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
       std::make_pair<double, double>(config->min_bound(), config->max_bound())};
 
   return constraints.validate_voltage_state(proposed_voltages);
+}
+
+bool ramp(math::PointSP end_point, double max_ramp_rate, int timeout_ms) {
+  safe_voltage_change(end_point, timeout_ms);
+  auto start_point = read_device_voltages(timeout_ms)->to_point();
+  math::Vector sweep_vector(start_point, end_point);
+  auto principal_axis = sweep_vector.principle_connection();
+  generic::PairSP<math::Quantity, math::Quantity> principal_bounds =
+      sweep_vector.at(principal_axis);
+  double total_time = std::abs(
+      std::abs(
+          (*principal_bounds->first() - principal_bounds->second())->value()) /
+      max_ramp_rate);
+  auto payload = request_port_payload(timeout_ms);
+  auto knobs = std::get<0>(payload);
+  auto time_domain = math::domains::LabelledDomain::from_port(
+      std::make_pair(0.0, total_time),
+      instrument_interfaces::names::InstrumentPort::Timer());
+  auto connections = *end_point->connections();
+  auto increasing = std::make_shared<generic::Map<std::string, bool>>();
+  math::domains::CoupledLabelledDomainSP domains =
+      std::make_shared<math::domains::CoupledLabelledDomain>();
+  for (const physics::device_structures::ConnectionSP &connection :
+       connections) {
+    auto it =
+        std::find_if(knobs.begin(), knobs.end(), [&](const auto &raw_knob) {
+          return *(raw_knob->pseudo_name()) == *connection;
+        });
+    if (it == knobs.end()) {
+      throw std::runtime_error(
+          "No connection was found in the ports matching the request");
+    }
+    auto found_knob = *it;
+    domains->push_back(math::domains::LabelledDomain::from_port(
+        std::make_pair(start_point->at(connection)->value(),
+                       end_point->at(connection)->value()),
+        found_knob));
+    increasing->insert(connection->name(), (end_point->at(connection) >
+                                            start_point->at(connection)));
+  }
+  // Division 1 sweep is a ramp always. The time domain here pertains to the
+  // whole measurement time of the ramp
+  std::vector<instrument_interfaces::WaveformSP> raw_waveform = {
+      instrument_interfaces::Waveform::CartesianIdentityWaveform1D(1, domains,
+                                                                   increasing)};
+  auto waveforms =
+      std::make_shared<generic::List<instrument_interfaces::Waveform>>(
+          raw_waveform);
+  auto request = std::make_shared<communications::messages::MeasurementRequest>(
+      "Performing a ramp measurement", "Ramp", waveforms,
+      std::make_shared<instrument_interfaces::names::Ports>(),
+      std::make_shared<generic::Map<
+          instrument_interfaces::names::InstrumentPort,
+          instrument_interfaces::port_transforms::PortTransform>>(),
+      time_domain);
+
+  try {
+    request_measurement(request, timeout_ms);
+    return true;
+  } catch (const std::exception &e) {
+    return false;
+  }
 }
 } // namespace falcon::routine
