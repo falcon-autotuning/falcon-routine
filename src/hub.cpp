@@ -15,11 +15,13 @@ namespace {
 const char *DEVICE_CACHE_SCOPE = "cache";
 namespace db = falcon::database;
 void cache_item(std::string name, std::string value) {
+  db::ReadWriteDatabaseConnection db_conn;
+  db_conn.delete_by_name(name);
+
   db::DeviceCharacteristic dc;
   dc.scope = DEVICE_CACHE_SCOPE;
   dc.name = name;
   dc.characteristic = value;
-  db::ReadWriteDatabaseConnection db_conn;
   db_conn.insert(dc);
 }
 std::vector<db::DeviceCharacteristic> read_cache(std::string name) {
