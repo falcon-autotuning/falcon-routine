@@ -56,6 +56,9 @@ request_measurement(
   long long value = Time().time();
   auto resp = comms.subscribe_measure_response(json_req, timeout_ms, value);
   auto outs = comms.pull_measurement_data(resp.stream, resp.channel, 1);
+  if (outs.empty()) {
+    throw std::runtime_error("No measurement data received");
+  }
   return falcon_core::communications::messages::MeasurementResponse::
       from_json_string<
           falcon_core::communications::messages::MeasurementResponse>(outs[0]);
