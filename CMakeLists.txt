@@ -43,8 +43,6 @@ find_package(cnats           CONFIG REQUIRED)
 find_package(falcon-database CONFIG REQUIRED)
 find_package(falcon-comms    CONFIG REQUIRED)
 find_package(falcon-core     CONFIG REQUIRED)
-find_package(ensmallen      CONFIG REQUIRED)
-find_package(Armadillo      CONFIG REQUIRED)
 
 message(STATUS "Found nlohmann_json: ${nlohmann_json_VERSION}")
 message(STATUS "Found spdlog: ${spdlog_VERSION}")
@@ -54,7 +52,6 @@ message(STATUS "Found NATS: ${nats_VERSION}")
 add_library(falcon-routine SHARED
   src/hub.cpp
   src/log.cpp
-  src/math.cpp
 )
 
 target_include_directories(falcon-routine
@@ -71,8 +68,6 @@ target_link_libraries(falcon-routine
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     cnats::nats
-    ensmallen::ensmallen
-    armadillo
 )
 target_compile_definitions(falcon-routine PRIVATE falcon_routine_EXPORTS)
 
