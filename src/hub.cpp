@@ -253,7 +253,7 @@ bool ramp(math::PointSP end_point, double max_ramp_rate, int timeout_ms) {
       std::make_shared<generic::List<instrument_interfaces::Waveform>>(
           raw_waveform);
   auto request = std::make_shared<communications::messages::MeasurementRequest>(
-      "Performing a ramp measurement", "Ramp", waveforms,
+      "Performing a ramp measurement", waveforms,
       std::make_shared<instrument_interfaces::names::Ports>(),
       std::make_shared<generic::Map<
           instrument_interfaces::names::InstrumentPort,
