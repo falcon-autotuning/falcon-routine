@@ -2,6 +2,8 @@
 #include "falcon-routine/export.h"
 #include <falcon-core/communications/messages/MeasurementRequest.hpp>
 #include <falcon-core/communications/messages/MeasurementResponse.hpp>
+#include <falcon-core/communications/messages/SettingRequest.hpp>
+#include <falcon-core/communications/messages/SettingResponse.hpp>
 #include <falcon-core/communications/messages/VoltageStatesResponse.hpp>
 #include <falcon-core/communications/voltage_states/DeviceVoltageStates.hpp>
 #include <falcon-core/instrument_interfaces/names/Ports.hpp>
@@ -29,6 +31,16 @@ request_device_state(int timeout_ms);
 communications::messages::MeasurementResponseSP FALCON_ROUTINE_API
 request_measurement(const communications::messages::MeasurementRequestSP &req,
                     int timeout_ms);
+
+/**
+ * @brief Allows access to the instrument hub to request or update settings
+ * @param req the setting request to perform
+ * @param timeout_ms the timeout in milliseconds to wait
+ * @return The SettingResponse if successful
+ */
+communications::messages::SettingResponseSP FALCON_ROUTINE_API
+request_setting(const communications::messages::SettingRequestSP &req,
+                int timeout_ms);
 
 /**
  * @brief Request the device config from the instrument hub.

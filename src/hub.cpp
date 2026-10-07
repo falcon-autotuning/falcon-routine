@@ -1,9 +1,16 @@
 #include "falcon-routine/hub.hpp"
 #include "falcon-routine/database.hpp"
+#include <atomic>
 #include <exception>
+#include <future>
+#include <nlohmann/json.hpp>
 #include <falcon-comms/routine_comms.hpp>
 #include <falcon-comms/runtime_comms.hpp>
 #include <falcon-core/communications/Time.hpp>
+#include <falcon-core/communications/messages/MeasurementRequest.hpp>
+#include <falcon-core/communications/messages/MeasurementResponse.hpp>
+#include <falcon-core/communications/messages/SettingRequest.hpp>
+#include <falcon-core/communications/messages/SettingResponse.hpp>
 #include <falcon-core/communications/messages/VoltageStatesResponse.hpp>
 #include <falcon-core/math/Vector.hpp>
 #include <falcon-core/physics/config/core/VoltageConstraints.hpp>
@@ -62,6 +69,57 @@ request_measurement(
   return falcon_core::communications::messages::MeasurementResponse::
       from_json_string<
           falcon_core::communications::messages::MeasurementResponse>(outs[0]);
+}
+
+falcon_core::communications::messages::SettingResponseSP
+request_setting(
+    const falcon_core::communications::messages::SettingRequestSP &req,
+    int timeout_ms) {
+  auto &hub = falcon::comms::NatsManager::instance();
+  std::promise<std::string> prom;
+  auto fut = prom.get_future();
+  std::atomic<bool> done{false};
+
+  long long timestamp = Time().time();
+  std::string response_subject =
+      "FALCON.SETTING_RESPONSE." + std::to_string(timestamp);
+
+  hub.subscribe(response_subject, [&prom, &done](const std::string &data) {
+    if (done.exchange(true)) {
+      return;
+    }
+    prom.set_value(data);
+  });
+
+  nlohmann::json cmd;
+  cmd["timestamp"] = timestamp;
+  cmd["request"] = req->to_json_string();
+  hub.publish("INSTRUMENTHUB.SETTING_COMMAND", cmd.dump());
+
+  try {
+    if (fut.wait_for(std::chrono::milliseconds(timeout_ms)) ==
+        std::future_status::ready) {
+      auto result = fut.get();
+      hub.unsubscribe(response_subject);
+      auto j = nlohmann::json::parse(result);
+      std::string resp_str;
+      if (j.is_object() && j.contains("response")) {
+        resp_str = j["response"].get<std::string>();
+      } else {
+        resp_str = result;
+      }
+      return falcon_core::communications::messages::SettingResponse::
+          from_json_string<
+              falcon_core::communications::messages::SettingResponse>(resp_str);
+    }
+
+    done = true;
+    hub.unsubscribe(response_subject);
+    throw std::runtime_error("Timeout waiting for SettingResponse");
+  } catch (...) {
+    hub.unsubscribe(response_subject);
+    throw;
+  }
 }
 
 falcon_core::physics::config::core::ConfigSP request_config(int timeout_ms) {
