@@ -1,9 +1,7 @@
 #include "falcon-routine/hub.hpp"
-#include "falcon-routine/database.hpp"
+#include "falcon-database/DatabaseConnection.hpp"
 #include <atomic>
 #include <exception>
-#include <future>
-#include <nlohmann/json.hpp>
 #include <falcon-comms/routine_comms.hpp>
 #include <falcon-comms/runtime_comms.hpp>
 #include <falcon-core/communications/Time.hpp>
@@ -12,31 +10,48 @@
 #include <falcon-core/communications/messages/SettingRequest.hpp>
 #include <falcon-core/communications/messages/SettingResponse.hpp>
 #include <falcon-core/communications/messages/VoltageStatesResponse.hpp>
+#include <falcon-core/instrument_interfaces/names/InstrumentPort.hpp>
 #include <falcon-core/math/Vector.hpp>
 #include <falcon-core/physics/config/core/VoltageConstraints.hpp>
-#include <limits>
+#include <future>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 namespace {
-const char *DEVICE_CACHE_SCOPE = "cache";
+constexpr std::string_view DEVICE_CACHE_SCOPE = "cache";
+constexpr std::string_view DEVICE_VOLTAGES_CACHE_NAME = "device_voltages";
+constexpr std::string_view OHMICS_CONNECTED_TO_VOLTAGE_SOURCES_CACHE_NAME =
+    "ohmics_connected_to_voltage_sources";
+constexpr std::string_view CONFIG_CACHE_NAME = "config";
 namespace db = falcon::database;
-void cache_item(std::string name, std::string value) {
+void cache_item(std::string_view name, std::string value) {
   db::ReadWriteDatabaseConnection db_conn;
-  db_conn.delete_by_name(name);
+  db_conn.delete_by_name(std::string(name));
 
-  db::DeviceCharacteristic dc;
-  dc.scope = DEVICE_CACHE_SCOPE;
-  dc.name = name;
-  dc.characteristic = value;
-  db_conn.insert(dc);
+  db::DeviceCharacteristic dchar;
+  dchar.scope = DEVICE_CACHE_SCOPE;
+  dchar.name = name;
+  dchar.characteristic = value;
+  db_conn.insert(dchar);
 }
-std::vector<db::DeviceCharacteristic> read_cache(std::string name) {
+std::vector<db::DeviceCharacteristic> read_cache(std::string_view name) {
   db::DeviceCharacteristicQuery query;
   db::ReadOnlyDatabaseConnection db_conn;
   query.scope = DEVICE_CACHE_SCOPE;
   query.name = name;
   return db_conn.get_by_query(query);
+}
+
+void cache_config(const falcon_core::physics::config::core::ConfigSP &config) {
+  cache_item(CONFIG_CACHE_NAME, config->to_json_string());
+}
+
+void cache_device_voltages(
+    const falcon_core::communications::voltage_states::DeviceVoltageStatesSP
+        &voltages) {
+  cache_item(DEVICE_VOLTAGES_CACHE_NAME, voltages->to_json_string());
 }
 } // namespace
 
@@ -53,9 +68,9 @@ request_device_state(int timeout_ms) {
           falcon_core::communications::messages::VoltageStatesResponse>(
           resp.response);
 }
-
-falcon_core::communications::messages::MeasurementResponseSP
-request_measurement(
+using falcon_core::communications::messages::MeasurementResponse;
+using falcon_core::communications::messages::MeasurementResponseSP;
+MeasurementResponseSP request_measurement(
     const falcon_core::communications::messages::MeasurementRequestSP &req,
     int timeout_ms) {
   falcon::comms::RoutineComms comms;
@@ -66,13 +81,13 @@ request_measurement(
   if (outs.empty()) {
     throw std::runtime_error("No measurement data received");
   }
-  return falcon_core::communications::messages::MeasurementResponse::
-      from_json_string<
-          falcon_core::communications::messages::MeasurementResponse>(outs[0]);
+  return MeasurementResponse::from_json_string<MeasurementResponse>(
+      outs.front());
 }
 
-falcon_core::communications::messages::SettingResponseSP
-request_setting(
+using falcon_core::communications::messages::SettingResponse;
+using falcon_core::communications::messages::SettingResponseSP;
+SettingResponseSP request_setting(
     const falcon_core::communications::messages::SettingRequestSP &req,
     int timeout_ms) {
   auto &hub = falcon::comms::NatsManager::instance();
@@ -91,9 +106,10 @@ request_setting(
     prom.set_value(data);
   });
 
-  nlohmann::json cmd;
-  cmd["timestamp"] = timestamp;
-  cmd["request"] = req->to_json_string();
+  nlohmann::json cmd = {
+      {"timestamp", timestamp},
+      {"request", req->to_json_string()},
+  };
   hub.publish("INSTRUMENTHUB.SETTING_COMMAND", cmd.dump());
 
   try {
@@ -101,16 +117,14 @@ request_setting(
         std::future_status::ready) {
       auto result = fut.get();
       hub.unsubscribe(response_subject);
-      auto j = nlohmann::json::parse(result);
+      auto json = nlohmann::json::parse(result);
       std::string resp_str;
-      if (j.is_object() && j.contains("response")) {
-        resp_str = j["response"].get<std::string>();
+      if (json.is_object() && json.contains("response")) {
+        resp_str = json.at("response").get<std::string>();
       } else {
         resp_str = result;
       }
-      return falcon_core::communications::messages::SettingResponse::
-          from_json_string<
-              falcon_core::communications::messages::SettingResponse>(resp_str);
+      return SettingResponse::from_json_string<SettingResponse>(resp_str);
     }
 
     done = true;
@@ -122,39 +136,27 @@ request_setting(
   }
 }
 
-falcon_core::physics::config::core::ConfigSP request_config(int timeout_ms) {
+using falcon_core::physics::config::core::Config;
+using falcon_core::physics::config::core::ConfigSP;
+ConfigSP request_config(int timeout_ms) {
   falcon::comms::RuntimeComms comms;
   long long value = Time().time();
   auto resp = comms.subscribe_config_response(timeout_ms, value);
-  return falcon_core::physics::config::core::Config::from_json_string<
-      falcon_core::physics::config::core::Config>(resp.response);
+  return Config::from_json_string<Config>(resp.response);
 }
-std::tuple<falcon_core::instrument_interfaces::names::Ports,
-           falcon_core::instrument_interfaces::names::Ports>
-request_port_payload(int timeout_ms) {
+
+using falcon_core::instrument_interfaces::names::Ports;
+using falcon_core::instrument_interfaces::names::PortsSP;
+std::tuple<PortsSP, PortsSP, PortsSP> request_port_payload(int timeout_ms) {
   falcon::comms::RuntimeComms comms;
   long long value = Time().time();
   auto resp = comms.subscribe_port_payload(timeout_ms, value);
-  auto knobs =
-      falcon_core::instrument_interfaces::names::Ports::from_json_string<
-          falcon_core::instrument_interfaces::names::Ports>(resp.knobs);
-  auto meters =
-      falcon_core::instrument_interfaces::names::Ports::from_json_string<
-          falcon_core::instrument_interfaces::names::Ports>(resp.meters);
-  return std::tuple<falcon_core::instrument_interfaces::names::Ports,
-                    falcon_core::instrument_interfaces::names::Ports>(knobs,
-                                                                      meters);
+  PortsSP knobs = Ports::from_json_string<Ports>(resp.knobs);
+  PortsSP meters = Ports::from_json_string<Ports>(resp.meters);
+  PortsSP settings = Ports::from_json_string<Ports>(resp.settings);
+  return {knobs, meters, settings};
 }
 
-const char *DEVICE_VOLTAGES_CACHE_NAME = "device_voltages";
-const char *OHMICS_CONNECTED_TO_VOLTAGE_SOURCES_CACHE_NAME =
-    "ohmics_connected_to_voltage_sources";
-const char *CONFIG_CACHE_NAME = "config";
-void cache_device_voltages(
-    falcon_core::communications::voltage_states::DeviceVoltageStatesSP
-        voltages) {
-  return cache_item(DEVICE_VOLTAGES_CACHE_NAME, voltages->to_json_string());
-}
 falcon_core::communications::voltage_states::DeviceVoltageStatesSP
 read_device_voltages(int timeout_ms) {
   auto results = read_cache(DEVICE_VOLTAGES_CACHE_NAME);
@@ -163,48 +165,46 @@ read_device_voltages(int timeout_ms) {
     return falcon_core::communications::voltage_states::DeviceVoltageStates::
         from_json_string<
             falcon_core::communications::voltage_states::DeviceVoltageStates>(
-            results[0].characteristic);
+            results.front().characteristic);
   }
   auto voltages = request_device_state(timeout_ms)->states();
   std::thread([voltages] { cache_device_voltages(voltages); }).detach();
   return voltages;
 }
-void cache_config(physics::config::core::ConfigSP config) {
-  return cache_item(CONFIG_CACHE_NAME, config->to_json_string());
-}
-physics::config::core::ConfigSP read_config(int timeout_ms) {
+ConfigSP read_config(int timeout_ms) {
   auto results = read_cache(CONFIG_CACHE_NAME);
   if (!results.empty()) {
     // Cache hit, return cached value
-    return falcon_core::physics::config::core::Config::from_json_string<
-        falcon_core::physics::config::core::Config>(results[0].characteristic);
+    return Config::from_json_string<Config>(results.front().characteristic);
   }
   auto config = request_config(timeout_ms);
   std::thread([config] { cache_config(config); }).detach();
   return config;
 }
 
-falcon_core::physics::device_structures::ConnectionsSP
-get_ohmics_connected_to_voltage_sources(int timeout_ms) {
+using falcon_core::generic::List;
+using falcon_core::instrument_interfaces::names::InstrumentPort;
+using falcon_core::instrument_interfaces::names::InstrumentPortSP;
+using falcon_core::physics::device_structures::Connections;
+using falcon_core::physics::device_structures::ConnectionsSP;
+ConnectionsSP get_ohmics_connected_to_voltage_sources(int timeout_ms) {
   auto results = read_cache(OHMICS_CONNECTED_TO_VOLTAGE_SOURCES_CACHE_NAME);
   if (!results.empty()) {
     // Cache hit, return cached value
-    return falcon_core::physics::device_structures::Connections::
-        from_json_string<falcon_core::physics::device_structures::Connections>(
-            results[0].characteristic);
+    return Connections::from_json_string<Connections>(
+        results.front().characteristic);
   }
   auto payload = request_port_payload(timeout_ms);
-  auto knobs = std::get<0>(payload);
-  auto meters = std::get<1>(payload);
+  PortsSP knobs = std::get<0>(payload);
+  PortsSP meters = std::get<1>(payload);
 
-  auto config = request_config(timeout_ms);
-  auto connections = config->ohmics();
-  physics::device_structures::ConnectionsSP
-      ohmics_connected_to_voltage_sources =
-          std::make_shared<physics::device_structures::Connections>();
-  auto raw_ports = *knobs.ports();
-  auto raw_ohmics = *connections;
-  for (const auto &knob : raw_ports) {
+  ConfigSP config = request_config(timeout_ms);
+  ConnectionsSP connections = config->ohmics();
+  ConnectionsSP ohmics_connected_to_voltage_sources =
+      std::make_shared<Connections>();
+  List<InstrumentPort> raw_ports = *knobs->ports();
+  Connections raw_ohmics = *connections;
+  for (const InstrumentPortSP &knob : raw_ports) {
     auto knob_connection = knob->pseudo_name();
     if (knob_connection->is_ohmic()) {
       for (const auto &ohmic : raw_ohmics) {
@@ -218,10 +218,13 @@ get_ohmics_connected_to_voltage_sources(int timeout_ms) {
   std::sort(ohmics_connected_to_voltage_sources->begin(),
             ohmics_connected_to_voltage_sources->end());
 
-  for (size_t i = ohmics_connected_to_voltage_sources->size() - 1; i > 0; --i) {
-    if ((*ohmics_connected_to_voltage_sources)[i] ==
-        (*ohmics_connected_to_voltage_sources)[i - 1]) {
-      ohmics_connected_to_voltage_sources->erase_at(i);
+  if (ohmics_connected_to_voltage_sources->size() > 1) {
+    for (size_t i = ohmics_connected_to_voltage_sources->size() - 1; i > 0;
+         --i) {
+      if (ohmics_connected_to_voltage_sources->at(i) ==
+          ohmics_connected_to_voltage_sources->at(i - 1)) {
+        ohmics_connected_to_voltage_sources->erase_at(i);
+      }
     }
   }
   // Launch cache update asynchronously
@@ -231,12 +234,14 @@ get_ohmics_connected_to_voltage_sources(int timeout_ms) {
   }).detach();
   return ohmics_connected_to_voltage_sources;
 }
+
 physics::device_structures::GateRelationsSP get_gate_relations(int timeout_ms) {
   auto config = request_config(timeout_ms);
   return config->generate_gate_relations();
 }
+
 math::domains::CoupledLabelledDomainSP
-get_voltage_bounds(const instrument_interfaces::names::PortsSP search_domain,
+get_voltage_bounds(const instrument_interfaces::names::PortsSP &search_domain,
                    int timeout_ms) {
   auto voltage_states = read_device_voltages(timeout_ms);
   if (!voltage_states) {
@@ -261,10 +266,12 @@ bool safe_voltage_change(math::PointSP proposed_voltages, int timeout_ms) {
       config->adjacency(), config->max_safe_diff(),
       std::make_pair<double, double>(config->min_bound(), config->max_bound())};
 
-  return constraints.validate_voltage_state(proposed_voltages);
+  return constraints.validate_voltage_state(std::move(proposed_voltages));
 }
 
-bool ramp(math::PointSP end_point, double max_ramp_rate, int timeout_ms) {
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+bool ramp(const math::PointSP &end_point, double max_ramp_rate,
+          int timeout_ms) {
   safe_voltage_change(end_point, timeout_ms);
   auto start_point = read_device_voltages(timeout_ms)->to_point();
   math::Vector sweep_vector(start_point, end_point);
@@ -275,26 +282,33 @@ bool ramp(math::PointSP end_point, double max_ramp_rate, int timeout_ms) {
       std::abs(
           (*principal_bounds->first() - principal_bounds->second())->value()) /
       max_ramp_rate);
-  auto payload = request_port_payload(timeout_ms);
-  auto knobs = std::get<0>(payload);
+  std::tuple<PortsSP, PortsSP, PortsSP> payload =
+      request_port_payload(timeout_ms);
+  PortsSP knobs = std::get<0>(payload);
   auto time_domain = math::domains::LabelledDomain::from_port(
-      std::make_pair(0.0, total_time),
-      instrument_interfaces::names::InstrumentPort::Timer());
-  auto connections = *end_point->connections();
+      std::make_pair(0.0, total_time), InstrumentPort::Timer());
+  List<physics::device_structures::Connection> connections =
+      *end_point->connections();
   auto increasing = std::make_shared<generic::Map<std::string, bool>>();
   math::domains::CoupledLabelledDomainSP domains =
       std::make_shared<math::domains::CoupledLabelledDomain>();
   for (const physics::device_structures::ConnectionSP &connection :
        connections) {
-    auto it =
-        std::find_if(knobs.begin(), knobs.end(), [&](const auto &raw_knob) {
-          return *(raw_knob->pseudo_name()) == *connection;
+    auto itr =
+        std::find_if(knobs->begin(), knobs->end(), [&](const auto &raw_knob) {
+          return (*raw_knob->pseudo_name() == *connection) &&
+                 (raw_knob->instrument() ==
+                      falcon_core::instrument_interfaces::names::Instrument::
+                          DC_Voltage_Source ||
+                  raw_knob->instrument() ==
+                      falcon_core::instrument_interfaces::names::Instrument::
+                          Voltage_Source);
         });
-    if (it == knobs.end()) {
+    if (itr == knobs->end()) {
       throw std::runtime_error(
           "No connection was found in the ports matching the request");
     }
-    auto found_knob = *it;
+    const auto &found_knob = *itr;
     domains->push_back(math::domains::LabelledDomain::from_port(
         std::make_pair(start_point->at(connection)->value(),
                        end_point->at(connection)->value()),
@@ -306,15 +320,15 @@ bool ramp(math::PointSP end_point, double max_ramp_rate, int timeout_ms) {
   // whole measurement time of the ramp
   std::vector<instrument_interfaces::WaveformSP> raw_waveform = {
       instrument_interfaces::Waveform::CartesianIdentityWaveform1D(1, domains,
-                                                                   increasing)};
+                                                                   increasing),
+  };
   auto waveforms =
       std::make_shared<generic::List<instrument_interfaces::Waveform>>(
           raw_waveform);
   auto request = std::make_shared<communications::messages::MeasurementRequest>(
-      "Performing a ramp measurement", waveforms,
-      std::make_shared<instrument_interfaces::names::Ports>(),
+      "Performing a ramp measurement", waveforms, std::make_shared<Ports>(),
       std::make_shared<generic::Map<
-          instrument_interfaces::names::InstrumentPort,
+          InstrumentPort,
           instrument_interfaces::port_transforms::PortTransform>>(),
       time_domain);
 

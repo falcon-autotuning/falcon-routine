@@ -38,9 +38,8 @@ request_measurement(const communications::messages::MeasurementRequestSP &req,
  * @param timeout_ms the timeout in milliseconds to wait
  * @return The SettingResponse if successful
  */
-communications::messages::SettingResponseSP FALCON_ROUTINE_API
-request_setting(const communications::messages::SettingRequestSP &req,
-                int timeout_ms);
+communications::messages::SettingResponseSP FALCON_ROUTINE_API request_setting(
+    const communications::messages::SettingRequestSP &req, int timeout_ms);
 
 /**
  * @brief Request the device config from the instrument hub.
@@ -55,8 +54,9 @@ request_config(int timeout_ms);
  * @param timeout_ms the timeout in milliseconds to wait
  * @return The Ports if successful
  */
-std::tuple<instrument_interfaces::names::Ports,
-           instrument_interfaces::names::Ports>
+std::tuple<instrument_interfaces::names::PortsSP,
+           instrument_interfaces::names::PortsSP,
+           instrument_interfaces::names::PortsSP>
     FALCON_ROUTINE_API request_port_payload(int timeout_ms);
 
 /**
@@ -117,7 +117,7 @@ needed
 * @return A map of connections to their safe voltage bounds.
 */
 math::domains::CoupledLabelledDomainSP FALCON_ROUTINE_API get_voltage_bounds(
-    const instrument_interfaces::names::PortsSP search_domain, int timeout_ms);
+    const instrument_interfaces::names::PortsSP &search_domain, int timeout_ms);
 
 /**
 * @brief Determines if the voltage change is safe.
@@ -136,6 +136,6 @@ bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
  * @param timeout_ms the timeout in milliseconds to wait if a request is needed
  * @return bool indicating a successful sweep
  */
-bool FALCON_ROUTINE_API ramp(math::PointSP end_point, double max_ramp_rate,
-                             int timeout_ms);
+bool FALCON_ROUTINE_API ramp(const math::PointSP &end_point,
+                             double max_ramp_rate, int timeout_ms);
 } // namespace falcon::routine
