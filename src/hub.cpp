@@ -44,19 +44,19 @@ std::vector<db::DeviceCharacteristic> read_cache(std::string_view name) {
   return db_conn.get_by_query(query);
 }
 
-void cache_config(const falcon_core::physics::config::core::ConfigSP &config) {
-  cache_item(CONFIG_CACHE_NAME, config->to_json_string());
-}
-
-void cache_device_voltages(
-    const falcon_core::communications::voltage_states::DeviceVoltageStatesSP
-        &voltages) {
-  cache_item(DEVICE_VOLTAGES_CACHE_NAME, voltages->to_json_string());
-}
 } // namespace
 
 namespace falcon::routine {
 using falcon_core::communications::Time;
+
+void cache_config(physics::config::core::ConfigSP config) {
+  cache_item(CONFIG_CACHE_NAME, config->to_json_string());
+}
+
+void cache_device_voltages(
+    communications::voltage_states::DeviceVoltageStatesSP voltages) {
+  cache_item(DEVICE_VOLTAGES_CACHE_NAME, voltages->to_json_string());
+}
 
 falcon_core::communications::messages::VoltageStatesResponseSP
 request_device_state(int timeout_ms) {
@@ -297,10 +297,10 @@ bool ramp(const math::PointSP &end_point, double max_ramp_rate,
     auto itr =
         std::find_if(knobs->begin(), knobs->end(), [&](const auto &raw_knob) {
           return (*raw_knob->pseudo_name() == *connection) &&
-                 (raw_knob->instrument() ==
+                 (raw_knob->instrument_type() ==
                       falcon_core::instrument_interfaces::names::Instrument::
                           DC_Voltage_Source ||
-                  raw_knob->instrument() ==
+                  raw_knob->instrument_type() ==
                       falcon_core::instrument_interfaces::names::Instrument::
                           Voltage_Source);
         });
