@@ -126,8 +126,8 @@ math::domains::CoupledLabelledDomainSP FALCON_ROUTINE_API get_voltage_bounds(
 needed
 * @return bool indicating if the voltage change is safe or not.
 */
-bool FALCON_ROUTINE_API safe_voltage_change(math::PointSP proposed_voltages,
-                                            int timeout_ms);
+bool FALCON_ROUTINE_API
+safe_voltage_change(const math::PointSP &proposed_voltages, int timeout_ms);
 
 /**
  * @brief A dedicated ramp method for sending ramps to the instrument hub.
